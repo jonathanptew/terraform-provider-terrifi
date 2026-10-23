@@ -16,6 +16,7 @@ var validResourceTypes = []string{
 	"terrifi_client_device",
 	"terrifi_client_group",
 	"terrifi_device",
+	"terrifi_device_port_overrides",
 	"terrifi_dns_record",
 	"terrifi_firewall_group",
 	"terrifi_firewall_zone",
@@ -144,6 +145,25 @@ func generateResourceBlocks(ctx context.Context, client *provider.Client, site, 
 			return nil, fmt.Errorf("listing devices: %w", err)
 		}
 		blocks = generate.DeviceBlocks(devices)
+
+	case "terrifi_device_port_overrides":
+		devices, err := client.ListSwitchDevices(ctx, site)
+		if err != nil {
+			return nil, fmt.Errorf("listing switches: %w", err)
+		}
+		switchable, err := client.SwitchableNetworkIDs(ctx, site)
+		if err != nil {
+			return nil, fmt.Errorf("listing networks: %w", err)
+		}
+		switches := make([]generate.SwitchPorts, 0, len(devices))
+		for i := range devices {
+			sw := generate.SwitchPorts{MAC: devices[i].MAC, Name: devices[i].Name, Ports: map[int64]generate.SwitchPort{}}
+			for idx, pc := range provider.PortConfigsForImport(&devices[i], switchable) {
+				sw.Ports[idx] = generate.SwitchPort(pc)
+			}
+			switches = append(switches, sw)
+		}
+		blocks = generate.DevicePortOverridesBlocks(switches)
 
 	case "terrifi_dns_record":
 		records, err := client.ListDNSRecord(ctx, site)
