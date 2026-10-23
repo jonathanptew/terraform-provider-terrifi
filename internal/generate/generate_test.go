@@ -929,3 +929,48 @@ func TestPortProfileBlocks(t *testing.T) {
 	assert.Equal(t, `["aa:bb:cc:dd:ee:ff"]`, cam["port_security_mac_addresses"])
 	assert.NotContains(t, cam, "tagged_vlan_mgmt")
 }
+
+func TestDevicePortOverridesBlocks(t *testing.T) {
+	blocks := DevicePortOverridesBlocks([]SwitchPorts{
+		{MAC: "aa:bb:cc:00:00:01", Name: "US 24 PoE", Ports: map[int64]SwitchPort{
+			4: {Name: "hp-dl380-01", TaggedVLANMgmt: "custom", TaggedNetworkIDs: []string{"n100", "n102"}, PoeMode: "off", StpEdgeState: "enabled"},
+			2: {Name: "hp-dl380-01-ilo", NativeNetworkID: "oob", TaggedVLANMgmt: "block_all", PoeMode: "off"},
+			9: {PortProfileID: "p1"},
+		}},
+		{MAC: "aa:bb:cc:00:00:02"}, // nothing configured: skipped
+	})
+	require.Len(t, blocks, 1)
+
+	var buf bytes.Buffer
+	require.NoError(t, WriteBlocks(&buf, blocks))
+	assert.Equal(t, `
+# Ports of US 24 PoE (aa:bb:cc:00:00:01)
+import {
+  to = terrifi_device_port_overrides.us_24_poe
+  id = "aa:bb:cc:00:00:01"
+}
+
+resource "terrifi_device_port_overrides" "us_24_poe" {
+  mac = "aa:bb:cc:00:00:01"
+  ports = {
+    "2" = {
+      name              = "hp-dl380-01-ilo"
+      native_network_id = "oob"
+      tagged_vlan_mgmt  = "block_all"
+      poe_mode          = "off"
+    }
+    "4" = {
+      name               = "hp-dl380-01"
+      tagged_vlan_mgmt   = "custom"
+      tagged_network_ids = ["n100", "n102"]
+      poe_mode           = "off"
+      stp_edge_state     = "enabled"
+    }
+    "9" = {
+      port_profile_id = "p1"
+    }
+  }
+}
+
+`, buf.String())
+}

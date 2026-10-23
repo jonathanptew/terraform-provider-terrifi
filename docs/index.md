@@ -129,6 +129,7 @@ Supported resource types:
 | `terrifi_firewall_policy_order` | Firewall policy ordering | [firewall_policy_order](resources/firewall_policy_order.md) |
 | `terrifi_network` | Networks | [network](resources/network.md) |
 | `terrifi_port_profile` | Switch port profiles | [port_profile](resources/port_profile.md) |
+| `terrifi_device_port_overrides` | Per-port settings of a switch | [device_port_overrides](resources/device_port_overrides.md) |
 | `terrifi_wlan` | Wireless networks | [wlan](resources/wlan.md) |
 
 Example:

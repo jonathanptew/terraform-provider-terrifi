@@ -215,6 +215,12 @@ func (r *portProfileResource) ValidateConfig(
 }
 
 func validatePortProfileTagging(mode types.String, tagged types.Set) diag.Diagnostics {
+	return validateTaggingAt(path.Empty(), mode, tagged)
+}
+
+// validateTaggingAt checks tagged_vlan_mgmt / tagged_network_ids under base,
+// so per-port settings can share the profile's rules.
+func validateTaggingAt(base path.Path, mode types.String, tagged types.Set) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if mode.IsUnknown() || tagged.IsUnknown() {
 		return diags
@@ -224,14 +230,14 @@ func validatePortProfileTagging(mode types.String, tagged types.Set) diag.Diagno
 
 	switch {
 	case isCustom && tagged.IsNull():
-		diags.AddAttributeError(path.Root("tagged_network_ids"), "Missing tagged networks",
+		diags.AddAttributeError(base.AtName("tagged_network_ids"), "Missing tagged networks",
 			"tagged_network_ids is required when tagged_vlan_mgmt is \"custom\".")
 	case isCustom && !hasTagged:
-		diags.AddAttributeError(path.Root("tagged_network_ids"), "Empty tagged networks",
+		diags.AddAttributeError(base.AtName("tagged_network_ids"), "Empty tagged networks",
 			"tagged_network_ids must not be empty when tagged_vlan_mgmt is \"custom\"; "+
 				"use tagged_vlan_mgmt = \"block_all\" for a port with no tagged networks.")
 	case !isCustom && !tagged.IsNull():
-		diags.AddAttributeError(path.Root("tagged_network_ids"), "Unexpected tagged networks",
+		diags.AddAttributeError(base.AtName("tagged_network_ids"), "Unexpected tagged networks",
 			"tagged_network_ids can only be set when tagged_vlan_mgmt is \"custom\".")
 	}
 	return diags
