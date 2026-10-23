@@ -891,3 +891,41 @@ func nestedAttrMap(nb NestedBlock) map[string]string {
 	}
 	return m
 }
+
+func TestPortProfileBlocks(t *testing.T) {
+	blocks := PortProfileBlocks([]PortProfile{
+		{ID: "p1", Name: "Locked", TaggedVLANMgmt: "block_all"},
+		{
+			ID: "p2", Name: "Proxmox Trunk", TaggedVLANMgmt: "custom",
+			TaggedNetworkIDs: []string{"n100", "n102"}, PoeMode: "off",
+		},
+		{ID: "p3", Name: "UI Made", NativeNetworkID: "def"},
+		{
+			ID: "p4", Name: "Camera", NativeNetworkID: "n30", TaggedVLANMgmt: "block_all",
+			Isolation: true, PortSecurityMACAddresses: []string{"aa:bb:cc:dd:ee:ff"},
+		},
+	})
+	require.Len(t, blocks, 4)
+
+	locked := attrMapFromBlock(blocks[0])
+	assert.Equal(t, "terrifi_port_profile", blocks[0].ResourceType)
+	assert.Equal(t, "locked", blocks[0].ResourceName)
+	assert.Equal(t, "p1", blocks[0].ImportID)
+	assert.Equal(t, map[string]string{"name": `"Locked"`}, locked)
+
+	trunk := attrMapFromBlock(blocks[1])
+	assert.Equal(t, `"custom"`, trunk["tagged_vlan_mgmt"])
+	assert.Equal(t, `["n100", "n102"]`, trunk["tagged_network_ids"])
+	assert.Equal(t, `"off"`, trunk["poe_mode"])
+	assert.NotContains(t, trunk, "native_network_id")
+
+	ui := attrMapFromBlock(blocks[2])
+	assert.Equal(t, `"def"`, ui["native_network_id"])
+	assert.Equal(t, `"auto"`, ui["tagged_vlan_mgmt"])
+	assert.NotContains(t, ui, "tagged_network_ids")
+
+	cam := attrMapFromBlock(blocks[3])
+	assert.Equal(t, "true", cam["isolation"])
+	assert.Equal(t, `["aa:bb:cc:dd:ee:ff"]`, cam["port_security_mac_addresses"])
+	assert.NotContains(t, cam, "tagged_vlan_mgmt")
+}

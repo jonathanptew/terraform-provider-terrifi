@@ -22,6 +22,7 @@ var validResourceTypes = []string{
 	"terrifi_firewall_policy",
 	"terrifi_firewall_policy_order",
 	"terrifi_network",
+	"terrifi_port_profile",
 	"terrifi_wlan",
 }
 
@@ -158,6 +159,17 @@ func generateResourceBlocks(ctx context.Context, client *provider.Client, site, 
 		}
 		blocks = generate.FirewallGroupBlocks(groups)
 
+	case "terrifi_port_profile":
+		profiles, err := client.ListPortProfiles(ctx, site)
+		if err != nil {
+			return nil, fmt.Errorf("listing port profiles: %w", err)
+		}
+		switchable, err := client.SwitchableNetworkIDs(ctx, site)
+		if err != nil {
+			return nil, fmt.Errorf("listing networks: %w", err)
+		}
+		blocks = generate.PortProfileBlocks(portProfilesForGenerate(profiles, switchable))
+
 	case "terrifi_firewall_zone":
 		zones, err := client.ListFirewallZone(ctx, site)
 		if err != nil {
@@ -207,4 +219,28 @@ func generateResourceBlocks(ctx context.Context, client *provider.Client, site, 
 	}
 
 	return blocks, nil
+}
+
+// portProfilesForGenerate resolves each profile's exclusion list into the
+// tagged networks terrifi_port_profile declares.
+func portProfilesForGenerate(profiles []provider.PortProfile, switchable []string) []generate.PortProfile {
+	out := make([]generate.PortProfile, 0, len(profiles))
+	for _, p := range profiles {
+		g := generate.PortProfile{
+			ID:              p.ID,
+			Name:            p.Name,
+			NativeNetworkID: p.NativeNetworkID,
+			TaggedVLANMgmt:  p.TaggedVLANMgmt,
+			PoeMode:         p.PoeMode,
+			Isolation:       p.Isolation,
+		}
+		if p.TaggedVLANMgmt == "custom" {
+			g.TaggedNetworkIDs = provider.TaggedFromExcluded(switchable, p.ExcludedNetworkIDs, p.NativeNetworkID)
+		}
+		if p.PortSecurityEnabled {
+			g.PortSecurityMACAddresses = p.PortSecurityMACAddress
+		}
+		out = append(out, g)
+	}
+	return out
 }
