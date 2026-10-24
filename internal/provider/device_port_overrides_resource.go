@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/ubiquiti-community/go-unifi/unifi"
 )
 
@@ -344,12 +345,24 @@ func (r *devicePortOverridesResource) ValidateConfig(
 	req resource.ValidateConfigRequest,
 	resp *resource.ValidateConfigResponse,
 ) {
-	var m devicePortOverridesModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &m)...)
-	if resp.Diagnostics.HasError() {
+	// Read ports on its own: when they reference resources not yet created
+	// (for_each profiles), the map or its entries are still unknown here and
+	// cannot be decoded into the model.
+	var ports types.Map
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("ports"), &ports)...)
+	if resp.Diagnostics.HasError() || ports.IsNull() || ports.IsUnknown() {
 		return
 	}
-	for key, po := range m.Ports {
+	for key, v := range ports.Elements() {
+		obj, ok := v.(types.Object)
+		if !ok || obj.IsNull() || obj.IsUnknown() {
+			continue
+		}
+		var po portOverrideModel
+		resp.Diagnostics.Append(obj.As(ctx, &po, basetypes.ObjectAsOptions{})...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 		resp.Diagnostics.Append(validatePortOverride(path.Root("ports").AtMapKey(key), po)...)
 	}
 }
