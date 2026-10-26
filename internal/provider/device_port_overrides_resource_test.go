@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -545,4 +548,27 @@ resource "terrifi_device_port_overrides" "sw" {
 			},
 		},
 	})
+}
+
+// Ports built with for_each over resources not yet created reach
+// ValidateConfig as an unknown map; validation must wait instead of failing.
+func TestDevicePortOverridesValidateConfig_unknownPorts(t *testing.T) {
+	ctx := context.Background()
+	r := &devicePortOverridesResource{}
+	var schemaResp fwresource.SchemaResponse
+	r.Schema(ctx, fwresource.SchemaRequest{}, &schemaResp)
+	s := schemaResp.Schema
+	typ := s.Type().TerraformType(ctx).(tftypes.Object)
+
+	vals := map[string]tftypes.Value{}
+	for name, at := range typ.AttributeTypes {
+		vals[name] = tftypes.NewValue(at, nil)
+	}
+	vals["mac"] = tftypes.NewValue(tftypes.String, "00:27:22:00:00:01")
+	vals["ports"] = tftypes.NewValue(typ.AttributeTypes["ports"], tftypes.UnknownValue)
+
+	req := fwresource.ValidateConfigRequest{Config: tfsdk.Config{Schema: s, Raw: tftypes.NewValue(typ, vals)}}
+	var resp fwresource.ValidateConfigResponse
+	r.ValidateConfig(ctx, req, &resp)
+	assert.False(t, resp.Diagnostics.HasError(), "%v", resp.Diagnostics)
 }
